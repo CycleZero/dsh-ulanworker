@@ -6,7 +6,8 @@
 > 移植正文来自上游 SUL-1.0 许可的项目，本仓库整体按同一许可分发。
 > 修改范围与来源见 [NOTICE.md](NOTICE.md)，许可原文见 [LICENSE.md](LICENSE.md)。
 >
-> 仓库：<https://github.com/CycleZero/dsh-ulanworker>（当前为私有，改公开前请先读 NOTICE 的许可一节）
+> 仓库：<https://github.com/CycleZero/dsh-ulanworker> —— 公开仓库。
+> 公开分发按 SUL-1.0 的约束进行：免费、非商业用途，并保留 [NOTICE.md](NOTICE.md) 与 [LICENSE.md](LICENSE.md)。
 
 装完之后：
 
