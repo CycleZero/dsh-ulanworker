@@ -1,0 +1,38 @@
+{
+  "name": "dsh-ulanworker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "dsh-ulanworker — a Sisyphus agent preset for DeepSeek Harness: a faithful port of OhMyOpenCode's default Sisyphus orchestrator prompt with DSH-native tools, plus the ultrawork and handoff skills bundled as /ultrawork and /handoff.",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis-plugin",
+    "agent-preset",
+    "sisyphus"
+  ],
+  "exports": {
+    ".": "./index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./prompts/*": "./prompts/*",
+    "./skills/*": "./skills/*",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "prompts/",
+    "skills/",
+    "locale/*.json",
+    "NOTICE.md"
+  ],
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

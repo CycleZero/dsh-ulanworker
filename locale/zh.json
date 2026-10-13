@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sisyphus（dsh-ulanworker）",
+    "description": "dsh-ulanworker 插件：新增 Sisyphus 智能体预设，复刻 OhMyOpenCode 默认 Sisyphus 编排提示词并改用 DSH 原生工具，同时内置 ultrawork 与 handoff 两个技能（/ultrawork、/handoff）。"
+  }
+}

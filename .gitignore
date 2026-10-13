@@ -1,0 +1,9 @@
+# Dependencies (the bundle declares none; a profile links it in)
+node_modules/
+
+# Working state the Sisyphus preset writes under the workspace root
+.dsh/
+
+# Editor / OS noise
+.DS_Store
+*.log

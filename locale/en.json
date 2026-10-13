@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sisyphus (dsh-ulanworker)",
+    "description": "The dsh-ulanworker plugin: adds a Sisyphus agent preset that ports OhMyOpenCode's default Sisyphus orchestrator prompt to DSH-native tools, with the ultrawork and handoff skills bundled as /ultrawork and /handoff."
+  }
+}
