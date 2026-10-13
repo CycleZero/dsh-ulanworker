@@ -1,0 +1,9 @@
+toolName: atlas
+title: Atlas
+summary: Executes a written plan end to end, tracking progress with todos and leaving evidence.
+enabled: true
+model: ""
+provider: ""
+reasoningEffort: ""
+toolFilter:
+  deny: [subagent, subagent_fork, spawn_teammate, workflow]

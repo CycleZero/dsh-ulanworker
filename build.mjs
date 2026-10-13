@@ -26,6 +26,8 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { SURFACE_DELTA, applySurfaceDelta } from './surface-delta.js'
+
 const ROOT = dirname(fileURLToPath(import.meta.url))
 const PROMPT_FILE = join(ROOT, 'prompts', 'sisyphus.md')
 const PLUGINS_FILE = join(ROOT, 'preset-plugins.yml')
@@ -88,12 +90,16 @@ function readPrompt() {
 }
 
 /**
- * Read the inherited tool surface and split off its persona row.
+ * Read the inherited tool surface, split off its persona row, and apply the
+ * declared delta.
  *
  * The persona row differs by preset, so it is regenerated; everything from the
- * first real tool row onward is copied byte for byte.
+ * first real tool row onward is copied byte for byte, then exactly the rows in
+ * {@link SURFACE_DELTA} are disabled or inserted. Any other difference is a
+ * build failure, which is what keeps "this preset has the shipped tool surface
+ * plus a named replacement" a checked fact rather than a claim.
  *
- * @returns the surface rows this preset inherits.
+ * @returns the surface rows this preset ships.
  */
 function readSurface() {
   const raw = readFileSync(PLUGINS_FILE, 'utf8').replace(/\r\n/g, '\n')
@@ -105,7 +111,7 @@ function readSurface() {
   if (index === -1) {
     throw new Error(`${PLUGINS_FILE} does not contain the expected anchor row "${SURFACE_ANCHOR.trim()}"`)
   }
-  return body.slice(index).replace(/\s+$/, '')
+  return applySurfaceDelta(body.slice(index).replace(/\s+$/, ''), SURFACE_DELTA, PLUGINS_FILE)
 }
 
 /**

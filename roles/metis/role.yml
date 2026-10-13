@@ -1,0 +1,9 @@
+toolName: metis
+title: Metis
+summary: Pre-planning analysis that surfaces the decisions, constraints, and risks a plan must settle first.
+enabled: true
+model: ""
+provider: ""
+reasoningEffort: ""
+toolFilter:
+  deny: [write, edit, subagent, subagent_fork, spawn_teammate, workflow]

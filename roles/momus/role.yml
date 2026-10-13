@@ -1,0 +1,9 @@
+toolName: momus
+title: Momus
+summary: Adversarial review of a plan: gaps, unstated assumptions, unverifiable claims.
+enabled: true
+model: ""
+provider: ""
+reasoningEffort: ""
+toolFilter:
+  deny: [write, edit, subagent, subagent_fork, spawn_teammate, workflow]

@@ -38,6 +38,9 @@ Derived from upstream (modified):
     consultant subagents, `.dsh/plans/` and `.dsh/notepad/`);
   - adding a `### Durable State: Plan File & Notepad` section and one
     completion-checklist item;
+  - replacing the generic "consultant / search / reviewer subagent" wording with
+    the concrete role names the preset actually exposes (`oracle`, `metis`,
+    `momus`, `plan`, `explore`, `librarian`, `looker`, `atlas`);
   - dropping content with no DSH counterpart rather than inventing a target
     for it.
 - `preset-plugins.yml` — the tool rows, lifted verbatim from the shipped
@@ -48,6 +51,17 @@ Original to this project:
 
 - `index.js` — the skill loader (frontmatter parsing, invocation policy,
   registration).
+- `subagent.js` — the role-dispatching delegation tool. Its *shape* follows the
+  upstream idea that a caller picks a specialist by name (`subagent_type=` →
+  `role=`), but the implementation, the roster, and every role persona are
+  written for this project against DeepSeek Harness's tool surface. The role
+  personas are rewritten from upstream's agent contracts, not copied: upstream's
+  `oracle` prompt alone is 28 KB and references tooling this harness does not
+  have.
+- `roles/**` — the roster: eight `role.yml` definitions and eight `persona.md`
+  bodies.
+- `yaml-lite.js`, `surface-delta.js` — the shared parser and the declared
+  tool-surface delta.
 - `build.mjs` — the patch generator, including the block-scalar round-trip
   assertion.
 - `verify.mjs` — the offline checks.

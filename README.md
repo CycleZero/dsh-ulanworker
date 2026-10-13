@@ -21,14 +21,20 @@
 dsh-ulanworker/
 ├── package.json         插件清单（dsh.bundle.patch 指向下面的补丁）
 ├── build.mjs            生成器：把提示词 + 工具面渲染成 cordis.patch.yml
+├── surface-delta.js     声明并施加"与出厂 standard 预设的差异"
 ├── prompts/sisyphus.md  移植后的系统提示词（唯一正文来源）
 ├── preset-plugins.yml   工具面：逐字取自出厂 standard 预设
 ├── cordis.patch.yml     生成物，不要手改
 ├── index.js             预设内插件：把 skills/ 下的技能注册进 skill 注册表
+├── subagent.js          预设内插件：角色化派发工具（替换原生 subagent）
+├── yaml-lite.js         两个加载器共用的极简 YAML 解析
+├── roles/<name>/
+│   ├── role.yml         角色定义：toolName / summary / model / toolFilter
+│   └── persona.md       该角色的系统提示词
 ├── skills/
 │   ├── ultrawork/SKILL.md
 │   └── handoff/SKILL.md
-├── verify.mjs           离线自检：技能解析与注册载荷
+├── verify.mjs           离线自检：技能、角色、派发请求、工具面差异
 └── locale/{zh,en}.json  Plugin Manager 卡片文案
 ```
 
@@ -79,12 +85,12 @@ node build.mjs --check  # 只检查补丁是否与正文同步
 | `task(subagent_type=..., load_skills=[...], run_in_background=true)` | `subagent`（fresh）/ `subagent_fork`（继承上下文），后台续用式 | 委派优先、六段式 brief、一次只委派一件事 |
 | `task(task_id="ses_...")` 续用 | `send_message` 给同一个子智能体 | 续用省 70% token，绝不为了追问新开一个 |
 | `background_output(task_id="bg_...")` / `background_cancel` | 删除。子智能体结束会收到一次结算通知；后台 shell 作业才用 `job_output` / `job_kill` | 绝不轮询、结束回合等通知、绝不留活进程 |
-| `oracle` 专家 | `<Consultant_Usage>`：以**只读 brief** 启动的 `subagent`，明令禁止改动 | 独立第二意见、依赖它的实现必须等它、结果没回来不许交付 |
+| `oracle` 专家 | `subagent(role="oracle")`：只读 persona + deny 写类工具，见 `<Oracle_Usage>` | 独立第二意见、依赖它的实现必须等它、结果没回来不许交付 |
 | `metis` / `momus` / `prometheus` / `plan` | `ask_user_question` 澄清 + 工作区计划文件 + 对抗式 reviewer 子智能体 | 先定性再动手、把计划写下来、计划也要被攻击一遍 |
 | `atlas`（待办编排器） | 就是本预设自己 | 用 todo 驱动执行 |
 | `explore` / `librarian` 专家 | 直接 `grep`/`glob`/`read` 并行；面太宽时发并行 search 子智能体；外部资料用 `web_search`/`web_fetch` | "委派过的搜索自己不重做"（Anti-Duplication 整节保留） |
 | `lsp_diagnostics` | 项目自己的 typecheck / lint / build / test 命令，用 `bash` 跑 | 证据条款：没有干净输出就不算完成 |
-| category（visual-engineering / ultrabrain / deep-low…） | 删除。改为在 brief 里点名技能、按领域选委派形态 | 委派前必须评估全部技能、按领域挑执行者 |
+| category（visual-engineering / ultrabrain / deep-low…） | 删除。改为 `subagent(role=…)` 选角色 + 在 brief 里点名技能 | 委派前必须评估全部技能、按领域挑执行者 |
 | `todowrite` / `TaskCreate` | `todo_write` | 立刻建、立刻标、绝不批量 |
 | `apply_patch`、`rg`、`interactive_bash` | `edit`/`write`、`grep` 工具、`bash` + 后台作业 | 用工具做工具的事 |
 | `.omo/plans/*.md`、notepad 文件协议 | 换成 `.dsh/plans/*.md` 与 `.dsh/notepad/*.md`，见下节 | 状态落在纸上，不落在上下文里；压缩或丢上下文后先读回自己的笔记再继续 |
@@ -98,6 +104,41 @@ node build.mjs --check  # 只检查补丁是否与正文同步
 
 上游那些**从实时 catalog 渲染**的动态节（工具选型表、委派表、category+技能指南）没有对应物，
 移植成静态文本，规则保留、表格按 DSH 的真实工具面重写。
+
+## 角色化派发：`subagent(role=…)`
+
+原生的 `subagent` 工具被**替换**成一个角色化派发工具：它同样是 `ctx.subagents` 的消费者，但多了一张角色表和一次参数映射。主 agent 派发时选的是角色，每个角色带着自己的系统提示词、工具白名单和默认模型出发。
+
+| role | 职责 | toolFilter |
+|---|---|---|
+| `oracle` | 只读高智商顾问：架构决策、硬调试、自查 | deny `write` `edit` + 委派类 |
+| `metis` | 动手前的预规划：必须先把哪些事定下来 | 同上 |
+| `momus` | 计划对抗式评审：缺口、假设、不可验证项 | 同上 |
+| `plan` | 结构化工作分解：顺序、依赖、并行、验收 | 同上 |
+| `explore` | 代码库检索：并行多角度，返回 `path:line` | 同上 |
+| `librarian` | 外部检索：官方文档、上游源码、生产实践 | 同上 |
+| `looker` | 读图/截图/PDF 并报告内容 | allow `read` `read_image` `glob` `grep` |
+| `atlas` | 端到端执行一份写好的计划并留下证据 | 全工具，仅 deny 委派类 |
+
+**模型语义**（每个角色的 `role.yml`）：`model` / `provider` / `reasoningEffort` **留空就跟随主会话**，填了就只用填的那些字段，其余字段仍从主会话继承。
+
+```yaml
+# roles/oracle/role.yml
+model: ""              # 空 → 请求里根本不带 agentOptions → 继承主会话路由
+# model: gpt-5.6-sol   # 非空 → agentOptions: { model: gpt-5.6-sol }
+```
+
+这条规则是**结构性的**，不是文档承诺：留空时 `buildChildRequest()` 返回的对象里没有 `agentOptions` 键，`verify.mjs` 直接断言这一点。
+
+改角色只需编辑 `roles/<name>/`，加角色只需新建一个目录（`enabled: false` 可摘掉某个角色而不删文件），然后 `node build.mjs && set_bundle` 关开一次。
+
+### 与出厂工具面的差异是声明式的
+
+`preset-plugins.yml` 逐字来自出厂 `standard` 预设，`surface-delta.js` 声明这唯一的差异：禁用 `tool-subagent`，插入 `ulanworker-subagent`。构建会断言"除了这两行，其余每一行都逐字节未变"，并断言生成物确实来自这份差异。所以"只替换了派发工具、其它一行没动"是**被检查的事实**，不是说法。
+
+### 一个部署约束
+
+以 `link:` 方式装进 profile 的 bundle，其**自身的 import 从工作区解析**——`@deepseek-ai/*` 那些包只在 DSH 安装目录里，加载不到。所以这个工具不走 `defineTool`，直接用 `ctx.tools.register({...})` 注册手写 JSON Schema 的工具，并且不 import 任何 DSH 包。副作用是它也完全不依赖 DSH 内部 API，只有 `ctx.tools` 与 `ctx.subagents` 两个服务接缝。
 
 ## 工作状态目录：`.dsh/`
 
@@ -152,14 +193,29 @@ node build.mjs --check  # 只检查补丁是否与正文同步
 - `preset-sisyphus` 行在合成配置里存活，状态与出厂预设同为 `schema`，配置满足
   `@deepseek-ai/dsh-agent-preset` 的 schema（`id` + `plugins` 必填）；
 - **`dsh --profile web --dump-config` 输出里的 persona `prefix` 反解回来与
-  `prompts/sisyphus.md` 逐字节相等（34,411 字符）**——即运行时拿到的正文就是这份文件；
-- 预设工具面与出厂 `standard` 逐行相等（18 行）；
+  `prompts/sisyphus.md` 逐字节相等（35,978 字符）**——即运行时拿到的正文就是这份文件；
+- 同一份 dump 里确认：21 个顶层行、`ulanworker-subagent` 行在、`delegation` 组里原生
+  `tool-subagent` `disabled: true`、`tool-subagent-fork` 与 `tool-subagent-control` 仍启用；
+- 工具面差异是**声明式且被断言**的：除 `surface-delta.js` 里那一禁一插，其余每一行与出厂
+  `standard` 逐字节相同，且生成物确实等于 `applySurfaceDelta(preset-plugins.yml, SURFACE_DELTA)`；
 - 补丁 YAML 可解析；生成器自带的块标量反解断言在每次 `node build.mjs` 时都会跑；
   负向对照：往正文里塞一个 `{{cwd}}` 会让构建以非零码退出；
-- `node verify.mjs` 通过：两个技能都解析出 `name` / `description` / `whenToUse` / `metadata`，
-  正文恰好等于去掉 frontmatter 的正文，`resourceBase` 指向各自目录；`disable-model-invocation` /
-  `user-invocable` 的取值与拼写规则与文件系统 provider 一致；缺 frontmatter、缺 description、
-  非法布尔值、旧键名四条拒绝路径都按预期告警并跳过；临时 fixture 目录已删除；
+- `node verify.mjs` 通过，四组检查：
+  1. **技能**：`name` / `description` / `whenToUse` / `metadata` 全部解析；正文恰好等于去掉
+     frontmatter 的正文；`resourceBase` 指向各自目录；`disable-model-invocation` / `user-invocable`
+     的拼写与语义与文件系统 provider 一致；缺 frontmatter、缺 description、非法布尔值、旧键名
+     四条拒绝路径按预期告警并跳过；
+  2. **角色**：8 个角色齐全且排序稳定；每个都有非空 persona（>400 字符）、summary、toolFilter；
+     **默认不钉任何模型**；重复 toolName、缺/空 persona、非 kebab 名、空 filter、filter 两项都不写、
+     model 含空格、`enabled` 拼错七条畸形角色全部按预期抛错；`enabled: false` 的角色被摘掉；
+     全部禁用的花名册报错；
+  3. **派发**：用一个桩 `ctx.subagents` **真的跑了一遍注册出来的工具**——断言工具名、必填字段、
+     role enum 等于花名册；后台调用返回 `started subagent child-1 (role: oracle)` 且启动 spec 里
+     **没有 `agentOptions` 键**；前台调用返回子 agent 文本；`max-tokens` 停止原因变成带部分输出的报错；
+     provider 缺 `persona` 能力时**挂载即失败**而不是首次派发才炸；
+  4. **工具面 + 提示词一致性**：提示词里 `role="…"` 出现的每个角色都在花名册里，花名册里每个角色
+     都在提示词里出现过；提示词依赖的 `subagent_fork` / `send_message` 对应行仍启用，原生
+     `tool-subagent` 确实被禁用。临时 fixture 目录已删除；
 - 全文审计：移植后的提示词里不再出现 Oracle、lsp_diagnostics、todowrite、background_output、
   `.omo/`、category 名、metis/momus/atlas 等不存在的东西；出现的每个工具名都在 DSH 工具表里；
   计划与 notepad 只落在 `.dsh/` 下。
@@ -169,7 +225,9 @@ node build.mjs --check  # 只检查补丁是否与正文同步
 
 1. 新开一个会话，在预设选择里选 **Sisyphus**；
 2. 问它"你是谁"——应答自己是 Sisyphus；
-3. 输入 `/ultrawork` 或 `/handoff`——应直接注入技能正文。
+3. 输入 `/ultrawork` 或 `/handoff`——应直接注入技能正文；
+4. 让主 agent 派一次活（例如"用 explore 找一下 X 在哪"）——工具表里应只有**一个** `subagent`，
+   带 `role` 枚举，且它能返回一个子 agent id。
 
 任何一步不对，把现象告诉我，我按 `--dump-config` 与插件日志继续查。
 
@@ -187,3 +245,9 @@ node build.mjs --check  # 只检查补丁是否与正文同步
   改技能时注意**两处**，否则会出现"改了没生效"。
 - `preset-plugins.yml` 是出厂 `standard` 预设的快照。DSH 升级后若要同步工具面，需要重新抽取一次。
 - 提示词正文保留英文（上游原文即英文，"尽可能还原"优先于翻译）。
+- 角色 persona 是**重写**而非逐字移植：OmO 的 oracle 单文件 28 KB、metis 21 KB，逐字搬会把 DSH 没有的
+  工具写进子 agent 的指令里。这里保留的是角色契约（职责、必须/禁止、输出形状、工具纪律），每个约 1.7–2.4 KB。
+- 派发工具**不暴露** `provider` / `model` / `reasoning_effort` 三个按次参数：那属于 Host 的
+  `subagent-model-selection` 策略，其执行代码没有导出，自己实现等于绕过用户的 allowlist。
+  要按次选模型就去开那个 Host 设置；要按角色钉模型就写 `role.yml`。
+- 角色子 agent **不能再委派**（Host 委派深度默认 1），所以 `atlas` 是执行者而不是二级编排者。

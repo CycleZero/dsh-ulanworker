@@ -1,0 +1,10 @@
+toolName: oracle
+title: Oracle
+summary: Independent read-only consultation on architecture and hard debugging.
+enabled: true
+# Empty means "follow the main session"; a value pins the child's route.
+model: ""
+provider: ""
+reasoningEffort: ""
+toolFilter:
+  deny: [write, edit, subagent, subagent_fork, spawn_teammate, workflow]

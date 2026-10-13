@@ -1,0 +1,9 @@
+toolName: librarian
+title: Librarian
+summary: External reference search: official docs, OSS behaviour, production patterns.
+enabled: true
+model: ""
+provider: ""
+reasoningEffort: ""
+toolFilter:
+  deny: [write, edit, subagent, subagent_fork, spawn_teammate, workflow]

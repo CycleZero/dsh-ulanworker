@@ -1,0 +1,9 @@
+toolName: looker
+title: Looker
+summary: Reads images, screenshots, and PDFs and reports what they contain.
+enabled: true
+model: ""
+provider: ""
+reasoningEffort: ""
+toolFilter:
+  allow: [read, read_image, glob, grep]

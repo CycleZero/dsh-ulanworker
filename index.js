@@ -30,6 +30,8 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { parseFrontmatter } from './yaml-lite.js'
+
 /** Plugin row name; matches the entry in `cordis.patch.yml`. */
 export const name = 'dsh-ulanworker'
 
@@ -192,75 +194,7 @@ function frontmatterBoolean(fields, key) {
 /**
  * Split one Markdown file into its frontmatter fields and its instruction body.
  *
- * Handles the subset the bundled skills use: top-level `key: value` scalars,
- * one nested `metadata:` map of the same shape, double- or single-quoted
- * values, and `|`/`>`-free plain scalars. Anything richer belongs in a real
- * YAML dependency this bundle deliberately does not carry.
- *
  * @param raw - the whole file.
  * @returns parsed fields plus the body, or undefined without frontmatter.
  */
-export function parseFrontmatter(raw) {
-  const text = raw.startsWith('\uFEFF') ? raw.slice(1) : raw
-  const lines = text.split('\n')
-  if (lines[0]?.trim() !== '---') return undefined
-
-  let end = -1
-  for (let index = 1; index < lines.length; index += 1) {
-    if (lines[index].trim() === '---') {
-      end = index
-      break
-    }
-  }
-  if (end === -1) return undefined
-
-  const fields = {}
-  let nestedKey
-  for (const line of lines.slice(1, end)) {
-    if (line.trim() === '' || line.trimStart().startsWith('#')) continue
-    const indented = /^[ \t]/.test(line)
-    const match = /^[ \t]*([A-Za-z0-9_-]+):[ \t]*(.*)$/.exec(line)
-    if (match === null) continue
-    const key = match[1]
-    const value = match[2].trim()
-    if (!indented) {
-      if (value === '') {
-        nestedKey = key
-        fields[key] = {}
-        continue
-      }
-      nestedKey = undefined
-      fields[key] = unquote(value)
-      continue
-    }
-    if (nestedKey !== undefined && typeof fields[nestedKey] === 'object') {
-      fields[nestedKey][key] = unquote(value)
-    }
-  }
-
-  const body = lines
-    .slice(end + 1)
-    .join('\n')
-    .replace(/^\n+/, '')
-  return { fields, body }
-}
-
-/**
- * Strip one layer of YAML quoting from a scalar.
- *
- * @param value - the raw scalar text.
- * @returns the unquoted value.
- */
-function unquote(value) {
-  if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
-    try {
-      return JSON.parse(value)
-    } catch {
-      return value.slice(1, -1)
-    }
-  }
-  if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) {
-    return value.slice(1, -1).replaceAll("''", "'")
-  }
-  return value
-}
+export { parseFrontmatter }

@@ -1,0 +1,9 @@
+toolName: explore
+title: Explore
+summary: Parallel codebase search: where something is, how it works, what pattern to follow.
+enabled: true
+model: ""
+provider: ""
+reasoningEffort: ""
+toolFilter:
+  deny: [write, edit, subagent, subagent_fork, spawn_teammate, workflow]

@@ -1,0 +1,9 @@
+toolName: plan
+title: Plan
+summary: A structured work breakdown: ordered steps, dependencies, parallel opportunities, acceptance checks.
+enabled: true
+model: ""
+provider: ""
+reasoningEffort: ""
+toolFilter:
+  deny: [write, edit, subagent, subagent_fork, spawn_teammate, workflow]
