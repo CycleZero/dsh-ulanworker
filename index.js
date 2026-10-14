@@ -27,7 +27,7 @@
  * @module dsh-ulanworker
  */
 
-import { appendFileSync, readdirSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -39,16 +39,6 @@ export const name = 'dsh-ulanworker'
 
 /** The registries this plugin contributes to. */
 export const inject = ['skills', 'tools', 'subagents']
-
-// TEMPORARY diagnostic (removed once the preset-scope registration is fixed).
-const TRACE_FILE = '/tmp/ulw-trace.log'
-const trace = (message) => {
-  try {
-    appendFileSync(TRACE_FILE, `${new Date().toISOString()} ${message}\n`)
-  } catch {
-    /* a diagnostic must never break the plugin */
-  }
-}
 
 /** Frontmatter keys this loader understands beyond `name`/`description`. */
 const LEGACY_INVOCATION_KEYS = ['disableModelInvocation', 'modelInvocable', 'userInvocable']
@@ -63,24 +53,7 @@ const SKILLS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'skills')
  * @param config - the plugin config; the roster root may be overridden.
  */
 export function apply(ctx, config) {
-  const disposers = []
-  try {
-    trace(`apply entered url=${import.meta.url}`)
-    trace(`services skills=${typeof ctx.skills} tools=${typeof ctx.tools} subagents=${typeof ctx.subagents}`)
-    disposers.push(...registerBundledSkills(ctx))
-    const dispatchDisposers = registerDispatch(ctx, config)
-    disposers.push(...dispatchDisposers)
-    try {
-      const seen = ctx.tools.get?.('subagent')
-      trace(`post-register: tools.get('subagent') = ${seen === undefined ? 'undefined' : 'FOUND'}`)
-    } catch (error) {
-      trace(`post-register tools.get threw: ${String(error)}`)
-    }
-    trace(`apply finished, ${disposers.length} disposer(s)`)
-  } catch (error) {
-    trace(`apply threw: ${String(error && error.stack ? error.stack : error)}`)
-    throw error
-  }
+  const disposers = [...registerBundledSkills(ctx), ...registerDispatch(ctx, config)]
   // Registrations happen outside the effect callback so the tool registry and
   // the skill registry attribute them to this plugin's own scope; the effect
   // only owns teardown.
@@ -106,11 +79,9 @@ function registerBundledSkills(ctx) {
     const result = buildRegistration(file, directory, entry)
     if (result.warning !== undefined) {
       ctx.logger?.warn?.(`dsh-ulanworker: ${result.warning}`)
-      trace(`skill skipped: ${result.warning}`)
       continue
     }
     disposers.push(ctx.skills.register(result.skill))
-    trace(`skill registered: ${result.skill.name}`)
   }
   return disposers
 }

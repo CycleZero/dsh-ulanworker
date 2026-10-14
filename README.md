@@ -35,6 +35,8 @@ dsh-ulanworker/
 │   ├── ultrawork/SKILL.md
 │   └── handoff/SKILL.md
 ├── verify.mjs           离线自检：技能、角色、派发请求、工具面差异
+├── smoke.mjs            真挂载冒烟：在真实进程里把 8 个角色各组合一次
+├── smoke-probe.mjs      冒烟用的探针插件（不属于 bundle 运行时）
 └── locale/{zh,en}.json  Plugin Manager 卡片文案
 ```
 
@@ -111,14 +113,19 @@ node build.mjs --check  # 只检查补丁是否与正文同步
 
 | role | 职责 | toolFilter |
 |---|---|---|
-| `oracle` | 只读高智商顾问：架构决策、硬调试、自查 | deny `write` `edit` + 委派类 |
+| `oracle` | 只读高智商顾问：架构决策、硬调试、自查 | deny `write` `edit` `subagent` `subagent_fork` `workflow` |
 | `metis` | 动手前的预规划：必须先把哪些事定下来 | 同上 |
 | `momus` | 计划对抗式评审：缺口、假设、不可验证项 | 同上 |
 | `plan` | 结构化工作分解：顺序、依赖、并行、验收 | 同上 |
 | `explore` | 代码库检索：并行多角度，返回 `path:line` | 同上 |
 | `librarian` | 外部检索：官方文档、上游源码、生产实践 | 同上 |
 | `looker` | 读图/截图/PDF 并报告内容 | allow `read` `read_image` `glob` `grep` |
-| `atlas` | 端到端执行一份写好的计划并留下证据 | 全工具，仅 deny 委派类 |
+| `atlas` | 端到端执行一份写好的计划并留下证据 | 全工具，仅 deny `subagent` `subagent_fork` `workflow` |
+
+**`toolFilter` 里的每个名字都必须是本部署真实存在的工具。** `tools.restrict()` 在子代理组合阶段校验名字，
+遇到未知名字直接抛错，整条角色用不了——而且是在**调用时**才炸，不是挂载时。所以这里刻意不写 Agent Teams 的
+`spawn_teammate` / `team_task_*`：那些名字只在启用 `dsh-experimental-agent-team-profile` 时存在。
+`verify.mjs` 有一条 lint 专门拦这类"条件存在"的工具名，`node smoke.mjs` 则是权威的真挂载检查。
 
 **模型语义**（每个角色的 `role.yml`）：`model` / `provider` / `reasoningEffort` **留空就跟随主会话**，填了就只用填的那些字段，其余字段仍从主会话继承。
 
@@ -216,7 +223,11 @@ model: ""              # 空 → 请求里根本不带 agentOptions → 继承�
      role enum 等于花名册；后台调用返回 `started subagent child-1 (role: oracle)` 且启动 spec 里
      **没有 `agentOptions` 键**；前台调用返回子 agent 文本；`max-tokens` 停止原因变成带部分输出的报错；
      provider 缺 `persona` 能力时**挂载即失败**而不是首次派发才炸；
-  4. **工具面 + 提示词一致性**：提示词里 `role="…"` 出现的每个角色都在花名册里，花名册里每个角色
+  4. **真挂载冒烟**（`node smoke.mjs`）：在一个真实的 `dsh --profile headless` 进程里，通过 `--patch`
+     挂上插件与探针，让探针对**每个角色各组合一次子代理**，断言 8 个全部返回 childId。
+     这一步才跑得到 `tools.restrict()`，也是唯一能发现"`toolFilter` 写了本部署不存在的工具名"的检查——
+     离线 stub 永远发现不了（这正是第二层缺陷溜过去的原因）；
+  5. **工具面 + 提示词一致性**：提示词里 `role="…"` 出现的每个角色都在花名册里，花名册里每个角色
      都在提示词里出现过；提示词依赖的 `subagent_fork` / `send_message` 对应行仍启用，原生
      `tool-subagent` 确实被禁用。临时 fixture 目录已删除；
 - 全文审计：移植后的提示词里不再出现 Oracle、lsp_diagnostics、todowrite、background_output、

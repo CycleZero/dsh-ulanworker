@@ -5,5 +5,9 @@ enabled: true
 model: ""
 provider: ""
 reasoningEffort: ""
+# Every name below must exist in this deployment's global tool table:
+# tools.restrict() rejects unknown names, and one bad name blocks the whole role.
+# Agent Teams tools (spawn_teammate, team_task_*) exist only while that bundle is
+# enabled, so they are deliberately not named here.
 toolFilter:
-  deny: [subagent, subagent_fork, spawn_teammate, workflow]
+  deny: [subagent, subagent_fork, workflow]

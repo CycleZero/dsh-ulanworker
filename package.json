@@ -19,7 +19,9 @@
     "./skills/*": "./skills/*",
     "./roles/*": "./roles/*",
     "./locale/*.json": "./locale/*.json",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./smoke": "./smoke.mjs",
+    "./smoke-probe": "./smoke-probe.mjs"
   },
   "files": [
     "index.js",
@@ -30,11 +32,14 @@
     "skills/",
     "roles/",
     "locale/*.json",
-    "NOTICE.md"
+    "NOTICE.md",
+    "smoke.mjs",
+    "smoke-probe.mjs"
   ],
   "scripts": {
     "build": "node build.mjs",
-    "check": "node build.mjs --check && node verify.mjs"
+    "check": "node build.mjs --check && node verify.mjs",
+    "smoke": "node smoke.mjs"
   },
   "dsh": {
     "bundle": {

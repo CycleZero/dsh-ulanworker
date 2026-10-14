@@ -29,6 +29,20 @@ import { SURFACE_DELTA, applySurfaceDelta, splitRows } from './surface-delta.js'
 const ROOT = dirname(fileURLToPath(import.meta.url))
 const EXPECTED_SKILLS = ['handoff', 'ultrawork']
 const EXPECTED_ROLES = ['atlas', 'explore', 'librarian', 'looker', 'metis', 'momus', 'oracle', 'plan']
+/**
+ * Tool names that exist only while an optional bundle is enabled. Naming one in
+ * a role's `toolFilter` breaks that role on every deployment without the bundle:
+ * `tools.restrict()` rejects unknown names while the child is composed, and the
+ * failure is per-call, not at mount. `node smoke.mjs` is the authoritative
+ * real-mount guard; this lint catches the mistake before a harness boots.
+ */
+const CONDITIONAL_TOOLS = new Set([
+  'spawn_teammate',
+  'team_task_create',
+  'team_task_get',
+  'team_task_list',
+  'team_task_update',
+])
 const ROW_INDENT = '          '
 const FIELD_INDENT = `${ROW_INDENT}  `
 
@@ -160,6 +174,14 @@ for (const roleName of roster.order) {
   check(role.summary.length > 20, `${roleName}: summary is too short to route on`)
   check(role.persona.length > 400, `${roleName}: persona is too short to define a role`)
   check(role.toolFilter !== undefined, `${roleName}: every role must declare a toolFilter`)
+  for (const [kind, names] of Object.entries(role.toolFilter ?? {})) {
+    for (const name of names) {
+      check(
+        !CONDITIONAL_TOOLS.has(name),
+        `${roleName}: toolFilter.${kind} names "${name}", which only exists while an optional bundle is enabled`,
+      )
+    }
+  }
   check(
     role.agentOptions === undefined,
     `${roleName}: ships with a pinned model (${JSON.stringify(role.agentOptions)}); the default roster must follow the main session`,
