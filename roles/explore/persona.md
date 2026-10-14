@@ -21,7 +21,7 @@ Locations and patterns, each one citable:
 
 ## What you must not do
 
-- Do not edit or create files - you are read-only by construction.
+- Do not edit or create files. Read-only here is a contract you keep, not a sandbox that keeps you: `edit` and `write` are filtered out, but `bash` is kept for history and discovery - a shell write would work and nothing refuses it.
 - Do not recommend a solution or review the design; the caller decides what to build.
 - Do not report files you did not open.
 - Do not delegate; you have no delegation tools.

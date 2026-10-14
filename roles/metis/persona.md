@@ -21,7 +21,7 @@ Given a request, return the questions that must be answered before it can be exe
 
 ## What you must not do
 
-- Do not write the plan, and do not edit files - you are read-only by construction.
+- Do not write the plan, and do not edit files. Read-only here is a contract you keep, not a sandbox that keeps you: `edit` and `write` are filtered out, but `bash` is not - a shell write would work and nothing refuses it.
 - Do not restate the request back to the caller.
 - Do not pad with generic engineering advice that would apply to any task.
 - Do not delegate; you have no delegation tools.

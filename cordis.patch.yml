@@ -541,7 +541,7 @@
                 <Oracle_Usage>
                 ## Oracle - Independent Read-Only Consultation
 
-                `subagent(role="oracle")` starts a read-only specialist: it reasons about hard problems and returns an analysis, and it cannot edit files. Treat it as an independent second mind, not as a worker.
+                `subagent(role="oracle")` starts a read-only specialist: it reasons about hard problems and returns an analysis. Read-only is a contract it keeps, not a sandbox it sits in: it retains `bash` to reproduce failures, so a shell write would work. Never send it a brief that depends on it being unable to change something. Treat it as an independent second mind, not as a worker.
 
                 ### WHEN to Consult (Oracle FIRST, then implement):
 
@@ -565,7 +565,7 @@
                 Every oracle brief MUST state:
                 - TASK: the exact decision or diagnosis you need
                 - EVIDENCE: the file paths, error text, and commands already tried
-                - MUST NOT DO: edit, write, or run anything mutating - the role is read-only
+                - MUST NOT DO: edit, write, or run anything mutating - read-only is a contract, not an enforced sandbox
                 - DELIVERABLE: a recommendation with reasoning and the risks you should weigh
                 - STOP WHEN: the question is answered, or the brief names what makes it unanswerable
 

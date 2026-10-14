@@ -122,7 +122,13 @@ node build.mjs --check  # 只检查补丁是否与正文同步
 | `looker` | 读图/截图/PDF 并报告内容 | allow `read` `read_image` `glob` `grep` |
 | `atlas` | 端到端执行一份写好的计划并留下证据 | 全工具，仅 deny `subagent` `subagent_fork` `workflow` |
 
-**`toolFilter` 里的每个名字都必须是本部署真实存在的工具。** `tools.restrict()` 在子代理组合阶段校验名字，
+**`toolFilter` 只挡工具，不挡 shell。** 六个只读角色的 `deny` 里没有 `bash`——oracle 要靠它复现故障，
+explore 要靠它读历史（`git log`），其余几个也可能要探状态。所以"只读"是**persona 里的一条契约，不是沙箱**：
+persona 与主提示词都是这么写的，子 agent 自己也能在工具列表里看到 `bash`，装作它不存在只会在需要复现故障时制造困惑。
+要让它成为事实，只能改用 allow 白名单（像 `looker` 那样），代价是把这个角色该读的 MCP 工具一并砍掉——
+`tools.restrict()` 不支持通配，逐个枚举上百个写类 MCP 工具名不现实，而且名字一旦不存在就会重演上面那个组合期报错。
+
+**`toolFilter` 里的每个名字还必须是本部署真实存在的工具。** `tools.restrict()` 在子代理组合阶段校验名字，
 遇到未知名字直接抛错，整条角色用不了——而且是在**调用时**才炸，不是挂载时。所以这里刻意不写 Agent Teams 的
 `spawn_teammate` / `team_task_*`：那些名字只在启用 `dsh-experimental-agent-team-profile` 时存在。
 `verify.mjs` 有一条 lint 专门拦这类"条件存在"的工具名，`node smoke.mjs` 则是权威的真挂载检查。
@@ -137,7 +143,12 @@ model: ""              # 空 → 请求里根本不带 agentOptions → 继承�
 
 这条规则是**结构性的**，不是文档承诺：留空时 `buildChildRequest()` 返回的对象里没有 `agentOptions` 键，`verify.mjs` 直接断言这一点。
 
-改角色只需编辑 `roles/<name>/`，加角色只需新建一个目录（`enabled: false` 可摘掉某个角色而不删文件），然后 `node build.mjs && set_bundle` 关开一次。
+改角色是纯数据操作：编辑 `roles/<name>/role.yml` 与 `persona.md`，加角色只需新建一个目录
+（`enabled: false` 可摘掉某个角色而不删文件）。
+
+**但改完必须重启 dsh，`set_bundle` 关开不够。** 名册是**挂载时读一次**的（`loadRoster()` 在 `apply()` 里，
+之后 execute 一直用这份快照），而角色文件不属于补丁内容——补丁没变，Loader 就没有理由重建那一行，
+于是不会重新挂载。实测过：`role.yml` 下午改完，直到晚上重启才生效。新开的会话也不行，它沿用当前 revision。
 
 ### 与出厂工具面的差异是声明式的
 
@@ -260,7 +271,9 @@ persona 正常、delegation 组正常，唯独新工具不出现。原因是进�
 
 | 改了什么 | 需要做什么 |
 |---|---|
-| `prompts/`、`roles/`、`skills/`、`cordis.patch.yml` | `node build.mjs` + `set_bundle` 关开一次即可 |
+| `prompts/sisyphus.md` | `node build.mjs` + `set_bundle` 关开一次：正文会编译进补丁，行配置变了 Loader 就会重建该行 |
+| `roles/`、`skills/` | **重启 dsh**：这两处是挂载时读盘的，补丁没变就不会重新挂载 |
+| `cordis.patch.yml`、`surface-delta.js` | `node build.mjs` + `set_bundle` 关开一次 |
 | `index.js` / `subagent.js` / `yaml-lite.js` / `surface-delta.js` | **重启 dsh**；并注意已存在的会话仍持有旧 revision，要**新开会话** |
 
 排查这类问题时，进程年龄是第一手证据：

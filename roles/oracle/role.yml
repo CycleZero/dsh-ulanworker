@@ -10,5 +10,10 @@ reasoningEffort: ""
 # tools.restrict() rejects unknown names, and one bad name blocks the whole role.
 # Agent Teams tools (spawn_teammate, team_task_*) exist only while that bundle is
 # enabled, so they are deliberately not named here.
+# `bash` is deliberately not denied: it is how these roles inspect state, and for
+# oracle and explore also how they reproduce a failure or read history. Read-only is
+# therefore a persona instruction, not a toolFilter fact - the filter refuses `write`
+# and `edit`, but not a shell write. An allow-list would make it enforceable, at the
+# cost of cutting every MCP tool the role may legitimately need to read.
 toolFilter:
   deny: [write, edit, subagent, subagent_fork, workflow]
