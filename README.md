@@ -25,8 +25,8 @@ dsh-ulanworker/
 ├── prompts/sisyphus.md  移植后的系统提示词（唯一正文来源）
 ├── preset-plugins.yml   工具面：逐字取自出厂 standard 预设
 ├── cordis.patch.yml     生成物，不要手改
-├── index.js             预设内插件：把 skills/ 下的技能注册进 skill 注册表
-├── subagent.js          预设内插件：角色化派发工具（替换原生 subagent）
+├── index.js             预设内插件：唯一入口（注册技能 + 注册派发工具）
+├── subagent.js          角色化派发工具（替换原生 subagent），由 index.js 相对导入
 ├── yaml-lite.js         两个加载器共用的极简 YAML 解析
 ├── roles/<name>/
 │   ├── role.yml         角色定义：toolName / summary / model / toolFilter
@@ -136,9 +136,12 @@ model: ""              # 空 → 请求里根本不带 agentOptions → 继承�
 
 `preset-plugins.yml` 逐字来自出厂 `standard` 预设，`surface-delta.js` 声明这唯一的差异：禁用 `tool-subagent`，插入 `ulanworker-subagent`。构建会断言"除了这两行，其余每一行都逐字节未变"，并断言生成物确实来自这份差异。所以"只替换了派发工具、其它一行没动"是**被检查的事实**，不是说法。
 
-### 一个部署约束
+### 两条部署约束（都是实测踩出来的）
 
-以 `link:` 方式装进 profile 的 bundle，其**自身的 import 从工作区解析**——`@deepseek-ai/*` 那些包只在 DSH 安装目录里，加载不到。所以这个工具不走 `defineTool`，直接用 `ctx.tools.register({...})` 注册手写 JSON Schema 的工具，并且不 import 任何 DSH 包。副作用是它也完全不依赖 DSH 内部 API，只有 `ctx.tools` 与 `ctx.subagents` 两个服务接缝。
+1. **以 `link:` 装进 profile 的 bundle，其自身的 import 从工作区解析**——`@deepseek-ai/*` 只在 DSH 安装目录里，加载不到。所以这个工具不走 `defineTool`，直接用 `ctx.tools.register({...})` 注册手写 JSON Schema 的工具，并且不 import 任何 DSH 包。副作用是它也完全不依赖 DSH 内部 API，只有 `ctx.tools` 与 `ctx.subagents` 两个服务接缝。
+2. **预设内的嵌套行只认裸包名，不认子路径导出。** 曾经把技能与派发工具拆成两行，第二行写 `dsh-ulanworker/subagent`；新建会话时报
+   `agent-preset/invalid: ulanworker-subagent (dsh-ulanworker/subagent): never started`。原因是 `EntryGroup.update()` 把导入失败 `.catch()` 进日志，条目留在 store 里但没有 fiber，审计只能报"从未启动"——真实原因被吞掉了。同一包的裸名行（技能）当时是正常的，所以判定是子路径在嵌套行里解析不到。
+   现在两者合并成**一个入口**（`index.js`），派发模块用相对导入引入。一行、一个插件、两种职责，但模块文件仍然是分开的。
 
 ## 工作状态目录：`.dsh/`
 
@@ -194,7 +197,7 @@ model: ""              # 空 → 请求里根本不带 agentOptions → 继承�
   `@deepseek-ai/dsh-agent-preset` 的 schema（`id` + `plugins` 必填）；
 - **`dsh --profile web --dump-config` 输出里的 persona `prefix` 反解回来与
   `prompts/sisyphus.md` 逐字节相等（35,978 字符）**——即运行时拿到的正文就是这份文件；
-- 同一份 dump 里确认：21 个顶层行、`ulanworker-subagent` 行在、`delegation` 组里原生
+- 同一份 dump 里确认：20 个顶层行、`ulanworker` 行在、`delegation` 组里原生
   `tool-subagent` `disabled: true`、`tool-subagent-fork` 与 `tool-subagent-control` 仍启用；
 - 工具面差异是**声明式且被断言**的：除 `surface-delta.js` 里那一禁一插，其余每一行与出厂
   `standard` 逐字节相同，且生成物确实等于 `applySurfaceDelta(preset-plugins.yml, SURFACE_DELTA)`；

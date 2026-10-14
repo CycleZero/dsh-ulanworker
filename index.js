@@ -1,27 +1,28 @@
 /**
- * dsh-ulanworker — bundles the `ultrawork` and `handoff` skills into the Sisyphus
- * agent preset.
+ * dsh-ulanworker — the preset's single plugin entry.
  *
- * The skills live beside this module as ordinary `skills/<name>/SKILL.md` files
- * with YAML frontmatter, the same shape `@deepseek-ai/dsh-skill-filesystem`
- * discovers. They are read once at activation and registered as runtime skills
- * through `ctx.skills.register(...)`, which gives them two surfaces at once:
+ * It contributes two things to the Sisyphus preset:
  *
- *  - model-invocable, so they appear in the session skill catalog and load
- *    through the `skill` tool;
- *  - user-invocable, so `/ultrawork` and `/handoff` inject the body directly.
+ *  1. **The bundled skills.** `ultrawork` and `handoff` live beside this module
+ *     as ordinary `skills/<name>/SKILL.md` files with YAML frontmatter, the
+ *     same shape `@deepseek-ai/dsh-skill-filesystem` discovers. They are read
+ *     once at activation and registered as runtime skills through
+ *     `ctx.skills.register(...)`, which gives them two surfaces at once:
+ *     model-invocable, so they appear in the session skill catalog and load
+ *     through the `skill` tool; and user-invocable, so `/ultrawork` and
+ *     `/handoff` inject the body directly. A skill whose frontmatter is
+ *     missing or malformed is reported and skipped — a half-parsed skill would
+ *     enter the catalog with an empty routing description and never be
+ *     selected, which is worse than being visibly absent.
  *
- * Registering from inside the preset keeps the preset self-contained: the
- * bodies travel with the plugin, resolve relative to this module no matter
- * where the bundle directory moves, and outrank the same-named copies a user
- * may have under `$DSH_HOME/skills` for sessions that select the preset.
+ *  2. **The role-dispatching delegation tool**, registered by `subagent.js`,
+ *     which replaces the shipped `subagent` tool for this preset.
  *
- * A skill whose frontmatter is missing or malformed is reported and skipped: a
- * half-parsed skill would enter the catalog with an empty routing description
- * and never be selected, which is worse than being visibly absent. The
- * `disable-model-invocation` and `user-invocable` keys are honored with the
- * same spellings the filesystem provider accepts, so a body moved between the
- * two sources keeps its invocation policy.
+ * One plugin, one loader row, on purpose. A profile-linked package resolves by
+ * its bare name inside a nested preset row, but not by its subpath exports:
+ * a second row naming `dsh-ulanworker/subagent` failed to import, and the
+ * loader reports that only as "never started". Keeping one entry point and
+ * importing the dispatch module relatively sidesteps the resolution entirely.
  *
  * @module dsh-ulanworker
  */
@@ -30,13 +31,14 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { registerDispatch } from './subagent.js'
 import { parseFrontmatter } from './yaml-lite.js'
 
 /** Plugin row name; matches the entry in `cordis.patch.yml`. */
 export const name = 'dsh-ulanworker'
 
-/** The skill registry this plugin contributes to. */
-export const inject = ['skills']
+/** The registries this plugin contributes to. */
+export const inject = ['skills', 'tools', 'subagents']
 
 /** Frontmatter keys this loader understands beyond `name`/`description`. */
 const LEGACY_INVOCATION_KEYS = ['disableModelInvocation', 'modelInvocable', 'userInvocable']
@@ -45,12 +47,22 @@ const LEGACY_INVOCATION_KEYS = ['disableModelInvocation', 'modelInvocable', 'use
 const SKILLS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'skills')
 
 /**
+ * Register everything this bundle contributes to the calling preset scope.
+ *
+ * @param ctx - the preset context that owns the registrations.
+ * @param config - the plugin config; the roster root may be overridden.
+ */
+export function apply(ctx, config) {
+  registerBundledSkills(ctx)
+  registerDispatch(ctx, config)
+}
+
+/**
  * Register every bundled skill into the calling scope's layer.
  *
  * @param ctx - the plugin context that owns the registration.
- * @param _config - the row's config; this plugin accepts none.
  */
-export function apply(ctx, _config) {
+function registerBundledSkills(ctx) {
   ctx.effect(
     () => {
       const disposers = []

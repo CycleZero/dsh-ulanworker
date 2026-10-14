@@ -183,8 +183,6 @@ function render(promptText, surfaceRows) {
               prefix: |-
 ${block}
               suffix: Your working directory is {{cwd}}.
-          - id: ulanworker-skills
-            name: dsh-ulanworker
 ${surfaceRows}
 `
 }

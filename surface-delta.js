@@ -16,8 +16,8 @@
 export const SURFACE_DELTA = {
   /** The shipped delegation tool this bundle replaces with its role dispatcher. */
   disable: ['tool-subagent'],
-  /** Rows inserted after the anchor, carrying the replacement tool. */
-  insert: [{ id: 'ulanworker-subagent', name: 'dsh-ulanworker/subagent' }],
+  /** Rows inserted after the anchor: this bundle's single plugin entry. */
+  insert: [{ id: 'ulanworker', name: 'dsh-ulanworker' }],
   /**
    * Sibling the replacement is inserted after. The `delegation` group holds the
    * replaced row, but the replacement lands as a top-level preset row: the group

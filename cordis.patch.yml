@@ -715,8 +715,6 @@
                 - Shell reads that `read`/`grep`/`glob` already do better are a defect: use the tool for the job
                 </Constraints>
               suffix: Your working directory is {{cwd}}.
-          - id: ulanworker-skills
-            name: dsh-ulanworker
           - id: agent-instructions
             name: '@deepseek-ai/dsh-agent-instructions'
             config:
@@ -833,8 +831,8 @@
                 config:
                   subagentProvider: spawn
                   maxRounds: 64
-          - id: ulanworker-subagent
-            name: dsh-ulanworker/subagent
+          - id: ulanworker
+            name: dsh-ulanworker
           - id: tool-ask-user
             name: '@deepseek-ai/dsh-tool-ask-user'
           - id: tool-todo

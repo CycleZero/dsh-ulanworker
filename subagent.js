@@ -30,6 +30,11 @@
  * would mean either bypassing a user-set allowlist or reimplementing it. A role
  * pins its model in `role.yml` instead.
  *
+ * Registration is called by the bundle's single plugin entry (`index.js`), not
+ * by the Loader directly: a profile-linked package resolves by its bare name in
+ * a nested preset row, but its subpath exports do not, and a row that fails to
+ * import is reported only as "never started".
+ *
  * @module dsh-ulanworker/subagent
  */
 
@@ -38,12 +43,6 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { parseSimpleYaml } from './yaml-lite.js'
-
-/** Plugin row name; matches the entry in `cordis.patch.yml`. */
-export const name = 'ulanworker-subagent'
-
-/** The tool registry and the subagent Service this adapter drives. */
-export const inject = ['tools', 'subagents']
 
 /** Directory holding one subdirectory per role. */
 const PACKAGE_DIR = dirname(fileURLToPath(import.meta.url))
@@ -61,12 +60,13 @@ const TRUTHY = new Set(['true', 'yes', 'on', '1'])
 const FALSY = new Set(['false', 'no', 'off', '0'])
 
 /**
- * Install the dispatch tool.
+ * Install the dispatch tool into a preset scope.
  *
- * @param ctx - the preset context that owns the tool registration.
- * @param config - the row's config; the roster root may be overridden.
+ * @param ctx - the preset context that owns the tool registration; its
+ *   `tools` and `subagents` services must be available.
+ * @param config - the plugin config; the roster root may be overridden.
  */
-export function apply(ctx, config) {
+export function registerDispatch(ctx, config) {
   const settings = config ?? {}
   const providerName = settings.provider ?? DEFAULT_PROVIDER
   const toolName = settings.toolName ?? DEFAULT_TOOL_NAME

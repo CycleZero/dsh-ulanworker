@@ -23,15 +23,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { apply, buildRegistration, inject, name } from './index.js'
-import {
-  buildChildRequest,
-  describeRoster,
-  inject as dispatchInject,
-  loadRoster,
-  name as dispatchName,
-  unknownRoleMessage,
-  validateArgs,
-} from './subagent.js'
+import { buildChildRequest, describeRoster, loadRoster, unknownRoleMessage, validateArgs } from './subagent.js'
 import { SURFACE_DELTA, applySurfaceDelta, splitRows } from './surface-delta.js'
 
 const ROOT = dirname(fileURLToPath(import.meta.url))
@@ -59,7 +51,23 @@ const throws = (fn, pattern, label) => {
 
 const registered = []
 const warnings = []
-const ctx = {
+let mounted
+const started = []
+const stubProvider = (overrides = {}) => ({
+  name: 'spawn',
+  capabilities: { persona: true, toolFilter: true, agentOptions: true },
+  prepareContinuable() {},
+  ...overrides,
+})
+
+/**
+ * A minimal stand-in for the preset context: enough of `skills`, `tools`, and
+ * `subagents` to run the real `apply()` and call the tool it registers.
+ *
+ * @param provider - the subagent provider the stub registry reports.
+ * @returns the stub context plus the arrays recording what was registered.
+ */
+const makeCtx = (provider = stubProvider()) => ({
   logger: { warn: (message) => warnings.push(String(message)) },
   skills: {
     register(skill) {
@@ -67,15 +75,43 @@ const ctx = {
       return () => {}
     },
   },
+  tools: {
+    register(tool) {
+      mounted = tool
+      return () => {}
+    },
+  },
+  subagents: {
+    getProvider: (wanted) => (provider.name === wanted ? provider : undefined),
+    resolveMaxDepth: () => 1,
+    startContinuable: async (spec) => {
+      started.push(spec)
+      return { childId: 'child-1' }
+    },
+    start: async (_name, request) => {
+      started.push(request)
+      return {
+        id: 'run-1',
+        result: Promise.resolve({ stopReason: 'completed', output: [{ type: 'text', text: 'the answer' }] }),
+        dispose: async () => {},
+      }
+    },
+  },
+  on() {
+    return () => {}
+  },
   effect(callback, label) {
     if (typeof label !== 'string' || label === '') throw new Error('ctx.effect called without a label')
     return callback()
   },
-}
+})
 
-apply(ctx, undefined)
+apply(makeCtx(), undefined)
 
-check(inject.length === 1 && inject[0] === 'skills', `inject must be ['skills'], got ${JSON.stringify(inject)}`)
+check(
+  inject.join(',') === 'skills,tools,subagents',
+  `inject must name the skill registry, the tool registry and the subagent service, got ${inject.join(',')}`,
+)
 check(name === 'dsh-ulanworker', `unexpected plugin name ${name}`)
 check(warnings.length === 0, `unexpected warnings: ${warnings.join(' | ')}`)
 check(
@@ -114,8 +150,6 @@ for (const skill of registered) {
 // -------------------------------------------------------------------- roles
 
 const roster = loadRoster(join(ROOT, 'roles'))
-check(dispatchName === 'ulanworker-subagent', `unexpected dispatch plugin name ${dispatchName}`)
-check(dispatchInject.join(',') === 'tools,subagents', `dispatch inject must be tools+subagents, got ${dispatchInject.join(',')}`)
 check(
   roster.order.join(',') === EXPECTED_ROLES.join(','),
   `roster is ${roster.order.join(',')}, expected ${EXPECTED_ROLES.join(',')}`,
@@ -187,47 +221,7 @@ validateArgs({ role: 'oracle', description: 'x', prompt: 'y' }, 'subagent', rost
 
 // --- the registered tool, against a stub Service --------------------------
 
-let mounted
-const started = []
-const stubProvider = (overrides = {}) => ({
-  name: 'spawn',
-  capabilities: { persona: true, toolFilter: true, agentOptions: true },
-  prepareContinuable() {},
-  ...overrides,
-})
-const stubCtx = (provider) => ({
-  effect: (callback) => {
-    callback()
-    return () => {}
-  },
-  on: () => {},
-  tools: {
-    register(tool) {
-      mounted = tool
-      return () => {}
-    },
-  },
-  subagents: {
-    getProvider: (wanted) => (provider.name === wanted ? provider : undefined),
-    resolveMaxDepth: () => 1,
-    startContinuable: async (spec) => {
-      started.push(spec)
-      return { childId: 'child-1' }
-    },
-    start: async (_name, request) => {
-      started.push(request)
-      return {
-        id: 'run-1',
-        result: Promise.resolve({ stopReason: 'completed', output: [{ type: 'text', text: 'the answer' }] }),
-        dispose: async () => {},
-      }
-    },
-  },
-})
-
-const { apply: applyDispatch } = await import('./subagent.js')
-applyDispatch(stubCtx(stubProvider()), {})
-check(mounted !== undefined, 'the dispatch plugin must register exactly one tool')
+check(mounted !== undefined, 'the plugin must register exactly one tool')
 check(mounted.name === 'subagent', `the dispatch tool must be named "subagent", got "${mounted.name}"`)
 check(mounted.parameters.required.join(',') === 'role,description,prompt', `unexpected required fields: ${mounted.parameters.required}`)
 check(
@@ -249,13 +243,13 @@ const foreground = await mounted.execute(
 )
 check(foreground === 'the answer', `a foreground call must return the child's text, got ${JSON.stringify(foreground)}`)
 
-const failing = stubCtx(stubProvider())
+const failing = makeCtx()
 failing.subagents.start = async () => ({
   id: 'run-2',
   result: Promise.resolve({ stopReason: 'max-tokens', output: [{ type: 'text', text: 'partial' }] }),
   dispose: async () => {},
 })
-applyDispatch(failing, {})
+apply(failing, {})
 let failureMessage
 try {
   await mounted.execute({ role: 'oracle', description: 'x', prompt: 'y', run_in_background: false }, { agent: { id: 'parent' } })
@@ -270,7 +264,7 @@ check(
 const withoutPersona = stubProvider({ capabilities: { persona: false, toolFilter: true, agentOptions: true } })
 let mountError
 try {
-  applyDispatch(stubCtx(withoutPersona), {})
+  apply(makeCtx(withoutPersona), {})
 } catch (error) {
   mountError = String(error.message)
 }
@@ -433,8 +427,8 @@ const marker = '        plugins:\n'
 const emitted = generated.slice(generated.indexOf(marker) + marker.length).replace(/\s+$/, '')
 check(emitted.includes(`${ROW_INDENT}- id: persona\n`), 'the emitted preset must open its plugin list with the persona row')
 check(
-  emitted.includes(`${ROW_INDENT}- id: ulanworker-skills\n${FIELD_INDENT}name: dsh-ulanworker\n`),
-  'the emitted preset must carry the skill row',
+  emitted.includes(`${ROW_INDENT}- id: ulanworker\n${FIELD_INDENT}name: dsh-ulanworker\n`),
+  'the emitted preset must carry exactly one row for this bundle',
 )
 check(
   emitted.endsWith(patched),
@@ -483,6 +477,6 @@ if (failures.length > 0) {
   process.exit(1)
 }
 console.log(
-  `\nPASS: ${registered.length} skills, ${roster.order.length} roles, request shaping, and a surface delta of ` +
+  `\nPASS: ${new Set(registered.map((skill) => skill.name)).size} skills, ${roster.order.length} roles, request shaping, and a surface delta of ` +
     `${SURFACE_DELTA.disable.length} disabled + ${SURFACE_DELTA.insert.length} inserted row(s)`,
 )

@@ -13,7 +13,6 @@
   ],
   "exports": {
     ".": "./index.js",
-    "./subagent": "./subagent.js",
     "./yaml-lite": "./yaml-lite.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./prompts/*": "./prompts/*",
