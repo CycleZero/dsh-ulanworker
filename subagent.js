@@ -65,6 +65,7 @@ const FALSY = new Set(['false', 'no', 'off', '0'])
  * @param ctx - the preset context that owns the tool registration; its
  *   `tools` and `subagents` services must be available.
  * @param config - the plugin config; the roster root may be overridden.
+ * @returns the tool registration's disposer, so the caller owns teardown.
  */
 export function registerDispatch(ctx, config) {
   const settings = config ?? {}
@@ -96,72 +97,69 @@ export function registerDispatch(ctx, config) {
     if (candidate.name === providerName) assertProvider(candidate)
   })
 
-  ctx.effect(
-    () =>
-      ctx.tools.register({
-        name: toolName,
-        description: describeRoster(roster),
-        // Hand-written JSON Schema rather than the harness's `defineTool`
-        // ergonomics: a workspace-installed bundle resolves its own imports
-        // from the workspace, so importing `@deepseek-ai/dsh-tools` here would
-        // fail to load. The registry stores exactly this shape.
-        parameters: {
-          type: 'object',
-          properties: {
-            role: {
-              type: 'string',
-              enum: [...roster.order],
-              description: 'Which specialist to start. Use the exact name from the role list in this tool description.',
-            },
-            description: {
-              type: 'string',
-              description: 'A 3-5 word label for this delegation, shown to the user and used to address the child.',
-            },
-            prompt: {
-              type: 'string',
-              description:
-                'The complete brief. The child sees nothing else: state the task, the evidence it needs, what to deliver, and when to stop.',
-            },
-            run_in_background: {
-              type: 'boolean',
-              description:
-                'Defaults to true: the child starts in the background and this call returns its id immediately. Set false only for a short child whose result gates your very next call.',
-            },
-          },
-          required: ['role', 'description', 'prompt'],
-          additionalProperties: false,
+  const registered = ctx.tools.register({
+    name: toolName,
+    description: describeRoster(roster),
+    // Hand-written JSON Schema rather than the harness's `defineTool`
+    // ergonomics: a workspace-installed bundle resolves its own imports from
+    // the workspace, so importing `@deepseek-ai/dsh-tools` here would fail to
+    // load. The registry stores exactly this shape.
+    parameters: {
+      type: 'object',
+      properties: {
+        role: {
+          type: 'string',
+          enum: [...roster.order],
+          description: 'Which specialist to start. Use the exact name from the role list in this tool description.',
         },
-        output: {
-          schema: { type: 'string' },
-          render: (_args, value) => [{ type: 'text', text: String(value) }],
+        description: {
+          type: 'string',
+          description: 'A 3-5 word label for this delegation, shown to the user and used to address the child.',
         },
-        isConcurrencySafe: () => true,
-        async execute(args, exec) {
-          const parent = exec.agent
-          if (!parent) throw new Error(`${toolName} requires a calling agent`)
-          validateArgs(args, toolName, roster)
-          const role = roster.roles.get(args.role)
-          if (ctx.subagents.getProvider(providerName) === undefined) {
-            throw new Error(`subagent provider "${providerName}" is not registered, so no child can be started`)
-          }
+        prompt: {
+          type: 'string',
+          description:
+            'The complete brief. The child sees nothing else: state the task, the evidence it needs, what to deliver, and when to stop.',
+        },
+        run_in_background: {
+          type: 'boolean',
+          description:
+            'Defaults to true: the child starts in the background and this call returns its id immediately. Set false only for a short child whose result gates your very next call.',
+        },
+      },
+      required: ['role', 'description', 'prompt'],
+      additionalProperties: false,
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    isConcurrencySafe: () => true,
+    async execute(args, exec) {
+      const parent = exec.agent
+      if (!parent) throw new Error(`${toolName} requires a calling agent`)
+      validateArgs(args, toolName, roster)
+      const role = roster.roles.get(args.role)
+      if (ctx.subagents.getProvider(providerName) === undefined) {
+        throw new Error(`subagent provider "${providerName}" is not registered, so no child can be started`)
+      }
 
-          const request = buildChildRequest(role, args, parent)
-          const background = args.run_in_background ?? true
-          if (!background) {
-            const run = await ctx.subagents.start(providerName, { ...request, signal: exec.signal })
-            return await settleForeground(run)
-          }
-          const started = await ctx.subagents.startContinuable({
-            provider: providerName,
-            label: args.description,
-            request,
-            signal: exec.signal,
-          })
-          return `started subagent ${started.childId} (role: ${role.toolName})`
-        },
-      }),
-    'ulanworker-subagent: role dispatch tool',
-  )
+      const request = buildChildRequest(role, args, parent)
+      const background = args.run_in_background ?? true
+      if (!background) {
+        const run = await ctx.subagents.start(providerName, { ...request, signal: exec.signal })
+        return await settleForeground(run)
+      }
+      const started = await ctx.subagents.startContinuable({
+        provider: providerName,
+        label: args.description,
+        request,
+        signal: exec.signal,
+      })
+      return `started subagent ${started.childId} (role: ${role.toolName})`
+    },
+  })
+  return [registered]
 }
 
 /**

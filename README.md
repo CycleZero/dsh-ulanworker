@@ -234,6 +234,30 @@ model: ""              # 空 → 请求里根本不带 agentOptions → 继承�
 
 任何一步不对，把现象告诉我，我按 `--dump-config` 与插件日志继续查。
 
+### 换了插件 JS 必须重启 dsh（否则改动不会生效）
+
+`set_bundle` 关开一次能让**补丁层**重新应用（行会变），但**不会重新导入插件的 JavaScript**：
+Loader 的 ESM 模块缓存按 URL 命中，同一个 `index.js` 只会在进程内求值一次。插件管理器文档写得很直白：
+"replacing an installed package requires restart to load a fresh JavaScript module generation"。
+
+这个坑真实踩到过：dsh web 进程从 10-09 起跑了五天，期间加的 `subagent` 派发工具一直不生效——预设挂载正常、
+persona 正常、delegation 组正常，唯独新工具不出现。原因是进程里缓存的还是 `index.js` 的**第一代**
+（只有技能、没有派发工具），后续所有改动对它都不可见。同一份代码在全新进程里（`dsh --profile headless`）
+一次就注册成功。
+
+所以规则是：
+
+| 改了什么 | 需要做什么 |
+|---|---|
+| `prompts/`、`roles/`、`skills/`、`cordis.patch.yml` | `node build.mjs` + `set_bundle` 关开一次即可 |
+| `index.js` / `subagent.js` / `yaml-lite.js` / `surface-delta.js` | **重启 dsh**；并注意已存在的会话仍持有旧 revision，要**新开会话** |
+
+排查这类问题时，进程年龄是第一手证据：
+
+```
+ps -eo pid,lstart,etime,cmd | grep "dsh web"
+```
+
 ### 重复安装会怎样
 
 对已安装的 bundle 再跑一次 `install_bundle` 会返回 `application: failed` 且 `error.code` 为
